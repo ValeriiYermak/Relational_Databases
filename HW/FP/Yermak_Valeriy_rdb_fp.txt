@@ -1,0 +1,178 @@
+
+drop schema if exists pandemic;
+
+
+-- *************************** TASK №1 ******************************************
+
+create schema if not exists pandemic;
+
+
+-- choose the pandemic database
+use pandemic;
+
+
+-- choose from table limit quantity of row
+select * from infectious_cases limit 10;
+
+
+-- *************************** TASK №2 ******************************************
+-- normalization of data
+-- create the country table
+create table if not exists entity (
+	id bigint unsigned auto_increment primary key, 
+	entity_name varchar(255),
+    code varchar(20) not null,
+    unique(entity_name, code)
+) engine = InnoDB;
+
+
+-- insert the country table    
+insert into entity (entity_name, code)
+select distinct Entity, Code
+from infectious_cases;
+
+
+-- create the disease table
+create table if not exists infectious_cases_normalized (
+	id bigint unsigned auto_increment primary key,
+	entity_id bigint unsigned not null,
+    year int not null,
+    disease varchar(255) not null,
+    cases bigint,
+    constraint fk_entity foreign key (entity_id) references entity(id)
+) engine = innoDB;
+  
+  
+-- insert the disease table
+insert into infectious_cases_normalized (entity_id, year, disease, cases)
+select e.id, i.Year, 'yaws', nullif(i.Number_yaws, '') + 0
+from infectious_cases i
+join entity e on i.Entity = e.entity_name and e.code = i.Code
+union all
+select e.id, i.Year, 'polio', nullif(i.polio_cases, '') + 0
+from infectious_cases i
+join entity e on e.entity_name = i.Entity and e.code = i.Code
+union all
+select e.id, i.Year, 'guinea_worm', i.cases_guinea_worm
+from infectious_cases i
+join entity e on e.entity_name = i.Entity and e.code = i.Code
+union all
+select e.id, i.Year, 'rabies', nullif(i.Number_rabies, '') + 0
+from infectious_cases i
+join entity e on e.entity_name = i.Entity and e.code = i.Code
+union all
+select e.id, i.Year, 'malaria', nullif(i.Number_malaria, '') + 0
+from infectious_cases i
+join entity e on e.entity_name = i.Entity and e.code = i.Code
+union all
+select e.id, i.Year, 'hiv', nullif(i.Number_hiv, '') + 0
+from infectious_cases i
+join entity e on e.entity_name = i.Entity and e.code = i.Code
+union all
+select e.id, i.Year, 'tuberculosis', nullif(i.Number_tuberculosis, '') + 0
+from infectious_cases i
+join entity e on e.entity_name = i.Entity and e.code = i.Code
+union all
+select e.id, i.Year, 'smallpox', nullif(i.Number_smallpox, '') + 0
+from infectious_cases i
+join entity e on e.entity_name = i.Entity and e.code = i.Code
+union all
+select e.id, i.Year, 'cholera', nullif(i.Number_cholera_cases, '') + 0
+from infectious_cases i
+join entity e on e.entity_name = i.Entity and e.code = i.Code;
+
+
+-- revision results of normalized
+SET SQL_SAFE_UPDATES = 0;
+
+DELETE FROM infectious_cases_normalized
+WHERE cases IS NULL OR cases = 0;
+
+SET SQL_SAFE_UPDATES = 1;
+
+select * from infectious_cases_normalized limit 10;
+
+
+select count(*) as total_records
+from infectious_cases;
+
+select count(*) as total_records
+from infectious_cases_normalized;
+
+
+-- *************************** TASK №3 ******************************************
+
+-- for infectious_cases
+select
+	entity,
+    code,
+    avg(cast(number_rabies as decimal(20,2))) as avg_rabies,
+	min(cast(number_rabies as decimal(20,2))) as min_rabies,
+    max(cast(number_rabies as decimal(20,2))) as max_rabies,
+    sum(cast(number_rabies as decimal(20,2))) as sum_rabies
+from infectious_cases
+where number_rabies <> '' -- removed empty value
+group by entity, code
+order by avg_rabies desc
+limit 10;
+
+-- for infectious_cases_normalized
+select
+	e.entity_name,
+    e.code,
+    avg(c.cases) as avg_rabies,
+    min(c.cases) as min_rabies,
+    max(c.cases) as max_rabies,
+    sum(c.cases) as sum_rabies
+from infectious_cases_normalized c 
+join entity e on e.id=c.entity_id
+where c.disease = 'rabies' and c.cases is not null and c.cases <> 0
+group by e.entity_name, e.code
+order by avg_rabies desc
+limit 10;
+	
+-- *************************** TASK №4 ******************************************
+
+-- for infectious_cases
+select
+	year, 
+    /* date 01.january of the relevant year */
+    str_to_date(concat(year, '-01-01'), '%Y-%m-%d') as first_january_date,
+
+    /* current date */
+    curdate() as today_date,
+    
+	/* Difference in years between two dates */
+	timestampdiff(year, str_to_date(concat(year, '-01-01'), '%Y-%m-%d'), curdate()) as year_difference
+from infectious_cases
+limit 10;
+
+-- for infectious_cases_normalized
+select distinct
+	year,
+    str_to_date(concat(year, '-01-01'), '%Y-%m-%d') as first_january_date,
+    curdate() as today_date,
+    timestampdiff(year, str_to_date(concat(year, '-01-01'), '%Y-%m-%d'), curdate()) as year_difference
+from infectious_cases_normalized
+order by year desc
+limit 10;
+
+-- *************************** TASK №5 ******************************************
+
+drop function if exists year_difference_from_year;
+
+delimiter //
+
+create function year_difference_from_year(input_year int)
+returns int
+deterministic
+begin
+	declare result int;
+    
+    set result = timestampdiff(year, str_to_date(concat(input_year, '-01-01'), '%Y-%m-%d'), curdate()
+	);
+	return result;
+end;
+//
+
+delimiter ;
